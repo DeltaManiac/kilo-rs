@@ -1,0 +1,51 @@
+version(1);
+project_name = "kilo-rs";
+patterns = {
+"src/*.rs",
+"Cargo.toml",
+"*.4coder",
+};
+blacklist_patterns = {
+".*",
+"target/*.rs",
+};
+load_paths_base = {
+ { ".", .relative = true, .recursive = true, },
+};
+load_paths = {
+ { load_paths_base, .os = "win", },
+ { load_paths_base, .os = "linux", },
+ { load_paths_base, .os = "mac", },
+};
+
+command_list = {
+ { .name = "build",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { { "cargo build" , .os = "win"   },
+            { "cargo build", .os = "linux" },
+            { "cargo build", .os = "mac"   }, 
+          }, 
+ },
+ { .name = "run",
+   .out = "*run*", .footer_panel = false, .save_dirty_files = false,
+   //.cmd = { { "cargo run --features=\"winit glium\"" , .os = "win"   },
+   .cmd = { { "cargo run" , .os = "win"   },
+            { "cargo run" , .os = "linux" },
+            { "cargo run" , .os = "mac"   }, }, },
+ { .name = "run release",
+   .out = "*run release*", .footer_panel = false, .save_dirty_files = false,
+   //.cmd = { { "cargo run --features=\"winit glium\"" , .os = "win"   },
+   .cmd = { { "cargo run --release" , .os = "win"   },
+            { "cargo run --release" , .os = "linux" },
+            { "cargo run --release" , .os = "mac"   }, }, },
+ { .name = "test",
+   .out = "*test*", .footer_panel = false, .save_dirty_files = false,
+   .cmd = { { "cargo test", .os = "win"   },
+            { "cargo test" , .os = "linux" },
+            { "cargo test" , .os = "mac"   }, }, },
+
+};
+fkey_command[1] = "build";
+fkey_command[2] = "run";
+fkey_command[3] = "test";
+fkey_command[4] = "run release";
