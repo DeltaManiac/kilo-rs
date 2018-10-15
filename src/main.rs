@@ -1,13 +1,16 @@
 extern crate libc;
 extern crate nix;
-
+extern crate termios;
 use std::os::unix::io::AsRawFd;
 
 use libc::TIOCGWINSZ;
 use nix::pty::Winsize;
 use std::fs::File;
 use std::io::prelude::*;
+use std::io;
+use std::os::unix::io::RawFd;
 
+use termios::*;
 use std::io::BufReader;
 enum KeyAction {
         Null,
@@ -21,7 +24,7 @@ enum KeyAction {
         ArrowDown,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Default)]
 struct EditorRow {
         idx: i32,
         size: i32,
@@ -29,9 +32,9 @@ struct EditorRow {
         content: Option<String>,
         rendered_content:Option<Vec<char>>,
 }
-#[derive(Debug)]
+#[derive(Debug,Default)]
 struct Cursor(i32, i32);
-#[derive(Debug)]
+#[derive(Debug,Default)]
 struct Editor {
         cursor: Cursor,
         row_offset: i32,
@@ -78,37 +81,58 @@ impl Editor {
             self.dirty = 0;
             let file = File::open((self.file_name.clone()).unwrap())?;
             let mut buf_reader = BufReader::new(file);
+            let mut rows:Vec<EditorRow> = Vec::new();
             let mut contents = String::new();
+            let mut counter = 0;
             while buf_reader.read_line(&mut contents)? != 0{
-                println!("###{}",contents);
-                contents.clear();
+                if contents.pop().unwrap()=='\n' {
+                    contents.push('\0');
+            } 
+            rows.push(EditorRow{
+                    idx: counter,
+                    size: contents.len() as i32,
+                    size_rendered: 0,
+                    content: Some(contents.clone()),
+                    rendered_content:None,
+            });
+            contents.clear();
+                counter+=1;
         };
-        Ok(())
+        self.rows=Some(rows);
+            Ok(())
     }
     
-    //Insert a row at the specified position
-    fn insert_row(&mut self,position:i32, content:String){
-            if position > self.num_rows {
-                return;
-        }
+    
+    fn enable_raw_mode(&mut self, fd: RawFd) -> io::Result<()> {
+            let mut termios = try!(Termios::from_fd(fd));
+            println!("Termio {:?}",&termios);
+            //tcgetattr(fd,&mut termios);
         
-        let row:EditorRow = EditorRow{
-                idx: position  ,
-                size: content.len() as i32,
-                size_rendered: 0,
-                content: Some(content),
-                rendered_content:None
-        };
         
-        if self.rows.is_none()  {
-                let a = vec![row];
-                self.rows = Some(a);
-        } else {
-            self.rows.unwrap().insert(position as usize, row);
-            
-        }
+            /* control modes = set 8 bit chars */
+            termios.c_cflag |= CS8;
         
+            /* local modes - choing off, canonical off, no extended functions,
+* no signal chars (^Z,^C) */
+            termios.c_lflag &= !(ECHO | ICANON| IEXTEN | ISIG);
+        
+        
+            /* input modes: no break, no CR to NL, no parity check, no strip char,
+* no start/stop output control. */
+            termios.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+        
+            /* output modes - disable post processing */
+            termios.c_oflag &= !(OPOST);
+        
+            termios.c_cc[VTIME] = 1;
+            try!(tcsetattr(fd, TCSAFLUSH, &termios));
+        
+            println!("Termio {:?}",&termios);
+        
+            self.raw_mode=1;
+            Ok(())
     }
+    
 }
 
 //ioctl_read!(read_winsize,std::io::stdin().as_raw_fd(),TIOCGWINSZ,Winsize);
@@ -116,5 +140,6 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let mut c = Editor::new();
         c.open(args[1].to_owned());
-        println!("{:?}", c);
+        c.enable_raw_mode(std::io::stdin().as_raw_fd());
+        //println!("{:?}", c);
 }
