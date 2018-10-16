@@ -5,12 +5,12 @@ use std::os::unix::io::AsRawFd;
 
 use libc::TIOCGWINSZ;
 use nix::pty::Winsize;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::os::unix::io::RawFd;
-
 use std::io::BufReader;
+use std::os::unix::io::RawFd;
 use termios::*;
 enum KeyAction {
     Null,
@@ -207,6 +207,34 @@ impl Editor {
             output.push_str("\x1b[0K");
             output.push_str("\r\n");
         }
+
+        //Status row
+        output.push_str("\x1b[0K");
+        output.push_str("\x1b[7m");
+        let status_row_1 = format!(
+            "{} - {} lines {}",
+            self.file_name.as_ref().unwrap(),
+            &self.num_rows,
+            ""
+        );
+        //println!("{}",status_row_1 );
+        let status_row_2 = format!("{}/{}", self.row_offset + self.cursor.1 + 1, &self.num_rows);
+        //println!("{}",status_row_2 );
+        output.push_str(&status_row_1);
+        let mut len = status_row_1.len();
+        if len > self.col_screen as usize {
+            len = self.col_screen as usize;
+        }
+        while (len as i32 )< self.col_screen  {
+            if self.col_screen - len as i32 == status_row_2.len() as i32 {
+                output.push_str(&status_row_2);
+                break;
+            } else {
+                output.push(' ');
+                len += 1;
+            }
+        }
+        output.push_str("\x1b[0m\r\n");
 
         /* Show Cursor*/
         output.push_str("\x1b[?25h");
