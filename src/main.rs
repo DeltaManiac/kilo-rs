@@ -18,6 +18,7 @@ enum KeyAction {
     CtrlD,
     CtrlF,
     CtrlH,
+    TAB = 9,
     ArrowLeft,
     ArrowRight,
     ArrowUp,
@@ -30,7 +31,7 @@ struct EditorRow {
     size: i32,
     size_rendered: i32,
     content: Option<String>,
-    rendered_content: Option<Vec<char>>,
+    rendered_content: Option<String>,
 }
 #[derive(Debug, Default)]
 struct Cursor(i32, i32);
@@ -74,6 +75,32 @@ impl Editor {
             dirty: 0,
         }
     }
+    fn update_row(&mut self, content: String) -> String {
+        let mut tab = 0;
+        let mut nonprint = 0;
+        let mut j = 0;
+        let mut idx = 0;
+        for j in content.chars() {
+            if j as u8 == KeyAction::TAB as u8 {
+                tab += 1;
+            }
+        }
+        let mut rendered_string = String::new();
+        for j in content.chars() {
+            if j as u8 == KeyAction::TAB as u8 {
+                rendered_string.push(' ');
+                idx += 1;
+                while (idx + 1) % 8 != 0 {
+                    rendered_string.push(' ');
+                    idx += 1;
+                }
+            } else {
+                rendered_string.push(j as char);
+            }
+        }
+        rendered_string.push('\0');
+        rendered_string.to_owned()
+    }
 
     fn open(&mut self, filename: String) -> std::io::Result<()> {
         self.file_name = Some(filename);
@@ -87,16 +114,18 @@ impl Editor {
             if contents.pop().unwrap() == '\n' {
                 contents.push('\0');
             }
+            let mut rendered_content = self.update_row(contents.clone());
             rows.push(EditorRow {
                 idx: counter,
                 size: contents.len() as i32,
-                size_rendered: 0,
+                size_rendered: rendered_content.len() as i32,
                 content: Some(contents.clone()),
-                rendered_content: None,
+                rendered_content: Some(rendered_content),
             });
             contents.clear();
             counter += 1;
         }
+        self.num_rows = rows.len() as i32;
         self.rows = Some(rows);
         Ok(())
     }
@@ -153,10 +182,32 @@ impl Editor {
                 }
                 continue;
             }
+            if filerow > -1 {
+                let mut len =
+                    self.rows.as_ref().unwrap()[filerow as usize].size_rendered - self.col_offset;
+                if len > 0 {
+                    if len > self.col_screen {
+                        len = self.col_screen;
+                    }
+                }
+                for j in 0..len {
+                    output.push(
+                        self.rows.as_ref().unwrap()[filerow as usize]
+                            .rendered_content
+                            .as_ref()
+                            .unwrap()
+                            .chars()
+                            .nth(j as usize)
+                            .unwrap(),
+                    );
+                }
+            }
+
+            output.push_str("\x1b[39m");
+            output.push_str("\x1b[0K");
+            output.push_str("\r\n");
         }
-        output.push_str("\x1b[39m");
-        output.push_str("\x1b[0K");
-        output.push_str("\r\n");
+
         /* Show Cursor*/
         output.push_str("\x1b[?25h");
         write!(std::io::stdout(), "{}", &output);
@@ -169,7 +220,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut c = Editor::new();
     c.open(args[1].to_owned());
-    c.enable_raw_mode(std::io::stdin().as_raw_fd());
+    //c.enable_raw_mode(std::io::stdin().as_raw_fd());
     c.refresh_screen();
     //println!("{:?}", c);
 }
