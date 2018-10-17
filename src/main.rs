@@ -47,6 +47,7 @@ struct Editor {
     rows: Option<Vec<EditorRow>>,
     dirty: i32,
     file_name: Option<String>,
+    status_msg: Option<String>,
 }
 
 impl Editor {
@@ -73,6 +74,7 @@ impl Editor {
             rows: None,
             file_name: None,
             dirty: 0,
+            status_msg: None,
         }
     }
     fn update_row(&mut self, content: String) -> String {
@@ -225,7 +227,7 @@ impl Editor {
         if len > self.col_screen as usize {
             len = self.col_screen as usize;
         }
-        while (len as i32 )< self.col_screen  {
+        while (len as i32) < self.col_screen {
             if self.col_screen - len as i32 == status_row_2.len() as i32 {
                 output.push_str(&status_row_2);
                 break;
@@ -235,11 +237,37 @@ impl Editor {
             }
         }
         output.push_str("\x1b[0m\r\n");
+        output.push_str("\x1b[0K");
+        output.push_str(&self.status_msg.as_ref().unwrap());
 
+        let mut cx = 1;
+        let file_row = self.row_offset - self.cursor.1;
+        if file_row > self.num_rows {
+            for j in self.col_offset..(self.cursor.0 + self.col_offset) {
+                if j < self.rows.as_ref().unwrap()[file_row as usize].size
+                    && self.rows.as_ref().unwrap()[file_row as usize]
+                        .content
+                        .as_ref()
+                        .unwrap()
+                        .chars()
+                        .nth(j as usize)
+                        .unwrap() as u8
+                        == 9
+                {
+                    cx += 7 - ((cx) % 8);
+                }
+                cx += 1;
+            }
+        }
+        //output.push_str(&format!("\x1b{}[{}H", self.cursor.1, cx));
         /* Show Cursor*/
         output.push_str("\x1b[?25h");
         write!(std::io::stdout(), "{}", &output);
         //print!("{}", &output);
+    }
+
+    fn set_status_msg(&mut self, msg: String) {
+        self.status_msg = Some(msg.to_owned());
     }
 }
 
@@ -249,6 +277,10 @@ fn main() {
     let mut c = Editor::new();
     c.open(args[1].to_owned());
     //c.enable_raw_mode(std::io::stdin().as_raw_fd());
-    c.refresh_screen();
+    c.set_status_msg("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find".to_string());
+    loop{
+c.refresh_screen();
+    }
+    
     //println!("{:?}", c);
 }
