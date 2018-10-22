@@ -5,11 +5,13 @@ use std::os::unix::io::AsRawFd;
 
 use libc::TIOCGWINSZ;
 use nix::pty::Winsize;
+use nix::unistd::write;
 use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::Stdin;
 use std::os::unix::io::RawFd;
 use termios::*;
 enum KeyAction {
@@ -262,8 +264,22 @@ impl Editor {
         //output.push_str(&format!("\x1b{}[{}H", self.cursor.1, cx));
         /* Show Cursor*/
         output.push_str("\x1b[?25h");
-        write!(std::io::stdout(), "{}", &output);
+        write(std::io::stdout().as_raw_fd(), &output.into_bytes()[..]);
+        //write!(std::io::stdout().as_raw_fd(), "{}", &output);
+
         //print!("{}", &output);
+    }
+
+    fn process_key_press(&mut self, mut fd: Stdin) -> std::io::Result<()> {
+        let mut buf = [0; 1];
+        while fd.read(&mut buf).is_err() {}
+        println!("{}:{:?}", buf[0] as char, buf[0] as char);
+
+        if buf[0] as char == 'q' {
+            std::process::exit(1);
+        }
+
+        Ok(())
     }
 
     fn set_status_msg(&mut self, msg: String) {
@@ -278,9 +294,10 @@ fn main() {
     c.open(args[1].to_owned());
     //c.enable_raw_mode(std::io::stdin().as_raw_fd());
     c.set_status_msg("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find".to_string());
-    loop{
-c.refresh_screen();
+    loop {
+        c.refresh_screen();
+        println!("{:?}", c.process_key_press(std::io::stdin()));
     }
-    
+
     //println!("{:?}", c);
 }
